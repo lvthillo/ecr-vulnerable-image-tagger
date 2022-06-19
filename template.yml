@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: 'AWS::Serverless-2016-10-31'
+Description: "ECR Image scanning Solution."
+
+Resources:
+  Repository: 
+    Type: "AWS::ECR::Repository"
+    Properties: 
+      RepositoryName: "node"
+      EncryptionConfiguration: 
+        EncryptionType: "AES256"
+      ImageScanningConfiguration: 
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+            {
+              "rulePriority": 1,
+              "description": "Remove vulnerable images after 5 days",
+              "selection": {
+                "tagStatus": "tagged",
+                "tagPrefixList": ["vulnerable"],
+                "countType": "sinceImagePushed",
+                "countUnit": "days",
+                "countNumber": 5
+              },
+              "action": { "type": "expire" }
+            }]
+          },
+          {
+            "rules": [
+            {
+              "rulePriority": 2,
+              "description": "Keep last 20 images",
+              "selection": {
+                "tagStatus": "untagged",
+                "countType": "imageCountMoreThan",
+                "countNumber": 20
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  EventTrigger:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: Trigger Lambda if a scan contains critical vulnerabilities
+      EventPattern:
+        source:
+          - "aws.ecr" 
+        detail-type:
+          - "ECR Image Scan" 
+        detail:
+          finding-severity-counts:
+            CRITICAL:
+              - exists: true
+              - numeric: [ ">", 0 ]
+      State:  "ENABLED"
+      Targets:
+      - Arn: !GetAtt LambdaFunction.Arn
+        Id: scan-ecr
+
+  EventTrigger:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: Trigger Lambda if a scan contains critical vulnerabilities
+      EventPattern:
+        source:
+          - "aws.ecr" 
+        detail-type:
+          - "ECR Image Scan" 
+        detail:
+          finding-severity-counts:
+            CRITICAL:
+              - exists: true
+              - numeric: [ ">", 0 ]
+      State:  "ENABLED"
+      Targets:
+      - Arn: !GetAtt LambdaFunction.Arn
+        Id: scan-ecr
+
+  LambdaFunction:
+    Type: "AWS::Serverless::Function"
+    Properties:
+      FunctionName: "ecr-scan-reporter"
+      Description: "Lambda function which updates tag to vulnernable for vulnerable images."
+      Handler: "function.lambda_handler"
+      CodeUri: "lambda"
+      Runtime: "python3.9"
+      Timeout: 10
+      MemorySize: 128
+      Role: !GetAtt LambdaRole.Arn
+
+  LambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "ecr-scan-reporter"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Path: "/"
+      Policies:
+        - PolicyName: "ecr-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ecr:BatchGetImage"
+                  - "ecr:PutImage"
+                Resource:
+                  - !GetAtt Repository.Arn
+
+  PermissionForEventsToInvokeLambda: 
+    Type: "AWS::Lambda::Permission"
+    Properties: 
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt EventTrigger.Arn
+
+  LambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/ecr-scan-reporter"
+      RetentionInDays: 14

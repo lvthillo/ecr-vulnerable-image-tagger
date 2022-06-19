@@ -1,0 +1,24 @@
+{
+	"version": "0",
+	"id": "cf82cd9c-8c98-bef6-77b4-5145b282823e",
+	"detail-type": "ECR Image Scan",
+	"source": "aws.ecr",
+	"account": "0123456789012",
+	"time": "2022-05-25T11:49:28Z",
+	"region": "eu-west-1",
+	"resources": ["arn:aws:ecr:eu-west-1:0123456789012:repository/node"],
+	"detail": {
+		"scan-status": "COMPLETE",
+		"repository-name": "node",
+		"image-digest": "sha256:f5b38e1fb0fe3e2eb4c7ab9c0466be7becb51680798da4b5a10f6953846dfd6b",
+		"image-tags": ["11-stretch-slim"],
+		"finding-severity-counts": {
+			"HIGH": 19,
+			"MEDIUM": 86,
+			"INFORMATIONAL": 55,
+			"LOW": 42,
+			"CRITICAL": 1,
+			"UNDEFINED": 11
+		}
+	}
+}
